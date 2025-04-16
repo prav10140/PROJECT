@@ -52,13 +52,14 @@ class Graph {
     // Dijkstra's algorithm implementation
     findShortestPath(startNode, endNode) {
         if (!this.nodes.has(startNode) || !this.nodes.has(endNode)) {
-            return { path: [], distance: Infinity };
+            return { path: [], distance: Infinity, visitedNodes: [] };
         }
 
         // Initialize distances with Infinity for all nodes except the start node
         const distances = new Map();
         const previous = new Map();
         const unvisited = new Set();
+        const visitedNodes = [];
 
         // Set all initial distances to Infinity
         for (const node of this.nodes.keys()) {
@@ -88,10 +89,14 @@ class Graph {
             if (smallestDistance === Infinity) break;
 
             // If we've reached the end node, we're done
-            if (current === endNode) break;
+            if (current === endNode) {
+                visitedNodes.push(current);
+                break;
+            }
 
             // Remove current node from unvisited set
             unvisited.delete(current);
+            visitedNodes.push(current);
 
             // Check all neighbors of the current node
             for (const { to, weight } of this.edges.get(current)) {
@@ -114,7 +119,7 @@ class Graph {
 
         // If there's no path to the end node
         if (previous.get(endNode) === null && startNode !== endNode) {
-            return { path: [], distance: Infinity };
+            return { path: [], distance: Infinity, visitedNodes };
         }
 
         // Reconstruct the path
@@ -125,7 +130,8 @@ class Graph {
 
         return {
             path,
-            distance: distances.get(endNode)
+            distance: distances.get(endNode),
+            visitedNodes
         };
     }
 }
@@ -133,13 +139,15 @@ class Graph {
 // UI Controller
 document.addEventListener('DOMContentLoaded', function() {
     const graph = new Graph();
+    
+    // Get DOM elements
     const canvas = document.getElementById('graph-canvas');
     const ctx = canvas.getContext('2d');
     const canvasMessage = document.getElementById('canvas-message');
     
     // Node input elements
     const nodeNameInput = document.getElementById('node-name');
-    const addNodeModeButton = document.getElementById('add-node-mode');
+    const addNodeButton = document.getElementById('add-node');
     
     // Edge input elements
     const fromNodeSelect = document.getElementById('from-node');
@@ -162,7 +170,28 @@ document.addEventListener('DOMContentLoaded', function() {
     const nodeRadius = 20;
     let isDragging = false;
     let draggedNode = null;
-    let isPlaceNodeMode = false;
+    let isPlacingNode = false;
+    
+    // Animation properties
+    let visitedNodesAnimation = [];
+    let pathAnimation = [];
+    let animationStep = 0;
+    let animationInterval = null;
+    
+    // Make canvas responsive
+    function resizeCanvas() {
+        const container = canvas.parentElement;
+        const rect = container.getBoundingClientRect();
+        
+        canvas.width = rect.width;
+        canvas.height = 400; // Fixed height or you can make it responsive too
+        
+        drawGraph();
+    }
+    
+    // Initial sizing and resize listener
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
     
     // Function to update the node selectors
     function updateNodeSelectors() {
@@ -197,7 +226,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Function to draw the graph
-    function drawGraph(highlightPath = []) {
+    function drawGraph(highlightPath = [], visitedNodes = []) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         // Draw edges
@@ -212,8 +241,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     highlightPath.length > 1 && 
                     highlightPath.includes(fromNode) && 
                     highlightPath.includes(edge.to) &&
-                    highlightPath.indexOf(fromNode) === highlightPath.indexOf(edge.to) - 1 || 
-                    highlightPath.indexOf(fromNode) === highlightPath.indexOf(edge.to) + 1;
+                    (highlightPath.indexOf(fromNode) === highlightPath.indexOf(edge.to) - 1 || 
+                     highlightPath.indexOf(fromNode) === highlightPath.indexOf(edge.to) + 1);
                 
                 // Draw the edge
                 ctx.beginPath();
@@ -255,9 +284,11 @@ document.addEventListener('DOMContentLoaded', function() {
             ctx.beginPath();
             ctx.arc(pos.x, pos.y, nodeRadius, 0, Math.PI * 2);
             
-            // Check if this node is part of the highlighted path
+            // Determine node color
             if (highlightPath.includes(nodeName)) {
                 ctx.fillStyle = '#e74c3c'; // Red for highlighted path
+            } else if (visitedNodes.includes(nodeName)) {
+                ctx.fillStyle = '#f39c12'; // Orange for visited nodes
             } else {
                 ctx.fillStyle = graph.nodeColors.get(nodeName);
             }
@@ -276,23 +307,23 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Toggle place node mode
-    addNodeModeButton.addEventListener('click', function() {
-        isPlaceNodeMode = !isPlaceNodeMode;
-        addNodeModeButton.classList.toggle('active', isPlaceNodeMode);
-        canvas.classList.toggle('place-node-mode', isPlaceNodeMode);
+    // Toggle node placement mode
+    addNodeButton.addEventListener('click', function() {
+        const nodeName = nodeNameInput.value.trim();
         
-        if (isPlaceNodeMode) {
+        if (nodeName) {
+            isPlacingNode = true;
             canvasMessage.style.display = 'block';
-            canvasMessage.textContent = 'Click to place node';
+            canvasMessage.textContent = 'Click on the canvas to place the node';
+            canvas.style.cursor = 'crosshair';
         } else {
-            canvasMessage.style.display = 'none';
+            alert('Please enter a node name!');
         }
     });
     
-    // Add a new node by clicking on the canvas
+    // Canvas click event for placing nodes
     canvas.addEventListener('click', function(e) {
-        if (isPlaceNodeMode) {
+        if (isPlacingNode) {
             const nodeName = nodeNameInput.value.trim();
             
             if (nodeName) {
@@ -305,16 +336,41 @@ document.addEventListener('DOMContentLoaded', function() {
                     updateNodeSelectors();
                     drawGraph();
                     
-                    // Turn off place node mode after placing a node
-                    isPlaceNodeMode = false;
-                    addNodeModeButton.classList.remove('active');
-                    canvas.classList.remove('place-node-mode');
+                    // Exit placement mode
+                    isPlacingNode = false;
+                    canvasMessage.style.display = 'none';
+                    canvas.style.cursor = 'default';
+                } else {
+                    alert('Node already exists!');
+                }
+            }
+        }
+    });
+    
+    // Touch event for mobile node placement
+    canvas.addEventListener('touchstart', function(e) {
+        if (isPlacingNode) {
+            e.preventDefault(); // Prevent scrolling
+            
+            const nodeName = nodeNameInput.value.trim();
+            
+            if (nodeName) {
+                const rect = canvas.getBoundingClientRect();
+                const touch = e.touches[0];
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                
+                if (graph.addNode(nodeName, x, y)) {
+                    nodeNameInput.value = '';
+                    updateNodeSelectors();
+                    drawGraph();
+                    
+                    // Exit placement mode
+                    isPlacingNode = false;
                     canvasMessage.style.display = 'none';
                 } else {
                     alert('Node already exists!');
                 }
-            } else {
-                alert('Please enter a node name!');
             }
         }
     });
@@ -346,12 +402,44 @@ document.addEventListener('DOMContentLoaded', function() {
         const endNode = endNodeSelect.value;
         
         if (startNode && endNode) {
+            // Stop any ongoing animation
+            if (animationInterval) {
+                clearInterval(animationInterval);
+                animationInterval = null;
+            }
+            
             const result = graph.findShortestPath(startNode, endNode);
             
             if (result.path.length > 0) {
-                pathDisplay.innerHTML = `<p>Path: ${result.path.join(' → ')}</p>`;
-                distanceDisplay.textContent = `Total Distance: ${result.distance}`;
-                drawGraph(result.path);
+                // Set up animation
+                visitedNodesAnimation = [...result.visitedNodes];
+                pathAnimation = [...result.path];
+                animationStep = 0;
+                
+                // Start animation
+                animationInterval = setInterval(function() {
+                    if (animationStep < visitedNodesAnimation.length + pathAnimation.length) {
+                        animationStep++;
+                        
+                        // Determine which nodes to highlight
+                        const currentVisited = visitedNodesAnimation.slice(0, 
+                            Math.min(animationStep, visitedNodesAnimation.length));
+                        
+                        const currentPath = animationStep > visitedNodesAnimation.length ? 
+                            pathAnimation.slice(0, animationStep - visitedNodesAnimation.length) : [];
+                        
+                        drawGraph(currentPath, currentVisited);
+                        
+                        // Update display when animation is complete
+                        if (animationStep === visitedNodesAnimation.length + pathAnimation.length) {
+                            pathDisplay.innerHTML = `<p>Path: ${result.path.join(' → ')}</p>`;
+                            distanceDisplay.textContent = `Total Distance: ${result.distance}`;
+                            
+                            clearInterval(animationInterval);
+                            animationInterval = null;
+                        }
+                    }
+                }, 200); // Animation speed
             } else {
                 pathDisplay.innerHTML = '<p>No path found between these nodes!</p>';
                 distanceDisplay.textContent = '';
@@ -362,43 +450,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Clear the graph
-    clearGraphButton.addEventListener('click', function() {
-        graph.clear();
-        updateNodeSelectors();
-        pathDisplay.innerHTML = '<p>Select start and end nodes to find the shortest path.</p>';
-        distanceDisplay.textContent = '';
-        drawGraph();
-    });
-    
-    // Load an example graph
-    exampleGraphButton.addEventListener('click', function() {
-        graph.clear();
-        
-        // Add nodes
-        graph.addNode('A', 100, 100);
-        graph.addNode('B', 250, 50);
-        graph.addNode('C', 400, 100);
-        graph.addNode('D', 100, 250);
-        graph.addNode('E', 250, 300);
-        graph.addNode('F', 400, 250);
-        
-        // Add edges
-        graph.addEdge('A', 'B', 4);
-        graph.addEdge('A', 'D', 2);
-        graph.addEdge('B', 'C', 3);
-        graph.addEdge('B', 'E', 3);
-        graph.addEdge('C', 'F', 2);
-        graph.addEdge('D', 'E', 1);
-        graph.addEdge('E', 'F', 5);
-        
-        updateNodeSelectors();
-        drawGraph();
-    });
-    
     // Canvas mouse events for dragging nodes
     canvas.addEventListener('mousedown', function(e) {
-        if (isPlaceNodeMode) return; // Don't start dragging in place node mode
+        if (isPlacingNode) return; // Don't start dragging in placement mode
         
         const rect = canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
@@ -436,15 +490,99 @@ document.addEventListener('DOMContentLoaded', function() {
         draggedNode = null;
     });
     
-    // Show canvas message when hovering over canvas in place node mode
-    canvas.addEventListener('mouseenter', function() {
-        if (isPlaceNodeMode) {
-            canvasMessage.style.display = 'block';
+    // Touch events for mobile dragging
+    canvas.addEventListener('touchstart', function(e) {
+        if (isPlacingNode) return;
+        
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        const touchX = touch.clientX - rect.left;
+        const touchY = touch.clientY - rect.top;
+        
+        // Check if a node was touched
+        for (const [nodeName, pos] of graph.nodes.entries()) {
+            const distance = Math.sqrt(Math.pow(touchX - pos.x, 2) + Math.pow(touchY - pos.y, 2));
+            
+            if (distance <= nodeRadius) {
+                e.preventDefault(); // Prevent scrolling when dragging
+                isDragging = true;
+                draggedNode = nodeName;
+                break;
+            }
         }
     });
     
-    canvas.addEventListener('mouseleave', function() {
-        canvasMessage.style.display = 'none';
+    canvas.addEventListener('touchmove', function(e) {
+        if (isDragging && draggedNode) {
+            e.preventDefault(); // Prevent scrolling when dragging
+            
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const touchX = touch.clientX - rect.left;
+            const touchY = touch.clientY - rect.top;
+            
+            // Update node position
+            const nodePos = graph.nodes.get(draggedNode);
+            nodePos.x = touchX;
+            nodePos.y = touchY;
+            
+            drawGraph();
+        }
+    });
+    
+    canvas.addEventListener('touchend', function() {
+        isDragging = false;
+        draggedNode = null;
+    });
+    
+    // Clear the graph
+    clearGraphButton.addEventListener('click', function() {
+        // Stop any ongoing animation
+        if (animationInterval) {
+            clearInterval(animationInterval);
+            animationInterval = null;
+        }
+        
+        graph.clear();
+        updateNodeSelectors();
+        pathDisplay.innerHTML = '<p>Select start and end nodes to find the shortest path.</p>';
+        distanceDisplay.textContent = '';
+        drawGraph();
+    });
+    
+    // Load an example graph
+    exampleGraphButton.addEventListener('click', function() {
+        // Stop any ongoing animation
+        if (animationInterval) {
+            clearInterval(animationInterval);
+            animationInterval = null;
+        }
+        
+        graph.clear();
+        
+        // Calculate positions based on canvas size
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        // Add nodes
+        graph.addNode('A', width * 0.2, height * 0.25);
+        graph.addNode('B', width * 0.4, height * 0.15);
+        graph.addNode('C', width * 0.6, height * 0.25);
+        graph.addNode('D', width * 0.2, height * 0.6);
+        graph.addNode('E', width * 0.4, height * 0.75);
+        graph.addNode('F', width * 0.6, height * 0.6);
+        
+        // Add edges
+        graph.addEdge('A', 'B', 4);
+        graph.addEdge('A', 'D', 2);
+        graph.addEdge('B', 'C', 3);
+        graph.addEdge('B', 'E', 3);
+        graph.addEdge('C', 'F', 2);
+        graph.addEdge('D', 'E', 1);
+        graph.addEdge('E', 'F', 5);
+        
+        updateNodeSelectors();
+        drawGraph();
     });
     
     // Initial draw
