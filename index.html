@@ -14,7 +14,7 @@
             <div class="control-group">
                 <h2>Add Node</h2>
                 <input type="text" id="node-name" placeholder="Node name (e.g., A, B, C)">
-                <button id="add-node-mode" class="mode-button">Place Node on Canvas</button>
+                <button id="add-node">Place Node on Canvas</button>
                 <p class="instruction" id="placement-instruction">Enter a node name and click on the canvas to place it</p>
             </div>
             
@@ -37,8 +37,8 @@
         <div class="results">
             <div class="graph-container">
                 <h2>Graph Visualization</h2>
-                <div class="canvas-container">
-                    <canvas id="graph-canvas" width="600" height="400"></canvas>
+                <div class="canvas-wrapper">
+                    <canvas id="graph-canvas"></canvas>
                     <div id="canvas-message">Click to place node</div>
                 </div>
             </div>
