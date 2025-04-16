@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dijkstra's Shortest Path Calculator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Dijkstra's Shortest Path Calculator</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <h2>Add Node</h2>
+                <input type="text" id="node-name" placeholder="Node name (e.g., A, B, C)">
+                <button id="add-node-mode" class="mode-button">Place Node on Canvas</button>
+                <p class="instruction" id="placement-instruction">Enter a node name and click on the canvas to place it</p>
+            </div>
+            
+            <div class="control-group">
+                <h2>Add Edge</h2>
+                <select id="from-node"></select>
+                <select id="to-node"></select>
+                <input type="number" id="edge-weight" placeholder="Weight" min="1">
+                <button id="add-edge">Add Edge</button>
+            </div>
+            
+            <div class="control-group">
+                <h2>Find Shortest Path</h2>
+                <select id="start-node"></select>
+                <select id="end-node"></select>
+                <button id="find-path">Find Shortest Path</button>
+            </div>
+        </div>
+        
+        <div class="results">
+            <div class="graph-container">
+                <h2>Graph Visualization</h2>
+                <div class="canvas-container">
+                    <canvas id="graph-canvas" width="600" height="400"></canvas>
+                    <div id="canvas-message">Click to place node</div>
+                </div>
+            </div>
+            
+            <div class="path-result">
+                <h2>Shortest Path</h2>
+                <div id="path-display">
+                    <p>Select start and end nodes to find the shortest path.</p>
+                </div>
+                <div id="distance-display"></div>
+            </div>
+        </div>
+        
+        <div class="actions">
+            <button id="clear-graph">Clear Graph</button>
+            <button id="example-graph">Load Example Graph</button>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
